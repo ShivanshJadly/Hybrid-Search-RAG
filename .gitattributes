@@ -1,0 +1,7 @@
+# Normalise to LF in the repo and in every working copy, so line endings do
+# not depend on who cloned it.
+* text=auto eol=lf
+
+# Git sees no NUL bytes in the first 8KB of this PDF and guesses "text", then
+# CRLF-translates it and breaks its xref table. It is binary; say so.
+*.pdf binary
