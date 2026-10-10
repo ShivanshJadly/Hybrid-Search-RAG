@@ -1,0 +1,31 @@
+# --- Core retrieval stack (all local, zero API cost) ---
+# chromadb must be >=1.0: the 0.x line depends on chroma-hnswlib, which has no
+# prebuilt Windows wheel and needs MSVC Build Tools to compile. 1.x replaced it
+# with a Rust core and ships binary wheels.
+chromadb>=1.5,<2.0
+rank-bm25==0.2.2
+sentence-transformers>=6.0,<7.0
+
+# torch is installed separately from the CPU index to avoid pulling a ~2GB CUDA
+# build that this machine cannot use (PyTorch has no ROCm build for Windows):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# --- Document loading ---
+pypdf>=6.0
+beautifulsoup4>=4.14
+lxml>=6.0
+
+# --- Plumbing ---
+pydantic>=2.10
+pydantic-settings>=2.6
+typer>=0.15
+rich>=13.9
+
+# --- API + dashboard (Phase 5) ---
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# --- Dev ---
+pytest>=8.3
+# reportlab is only needed to regenerate the sample PDF fixture:
+#   pip install reportlab && python scripts/make_sample_pdf.py

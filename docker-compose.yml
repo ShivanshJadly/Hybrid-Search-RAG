@@ -1,0 +1,33 @@
+# One service, not three.
+#
+# The plan sketches "API + ChromaDB + frontend". In this build ChromaDB runs
+# embedded (a file-backed library, not a server) and the dashboard is static
+# files served by the API, so splitting them would add two containers and a
+# network hop without adding capability. If ChromaDB is ever needed as a shared
+# server, swap PersistentClient for HttpClient in stores/vector.py and add the
+# chromadb/chroma service here.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data:ro          # source documents, read-only
+      - rag-storage:/app/storage     # indexes survive rebuilds
+      - hf-models:/models            # model cache
+    environment:
+      RAG_LLM_BACKEND: ${RAG_LLM_BACKEND:-stub}
+      RAG_JUDGE_BACKEND: ${RAG_JUDGE_BACKEND:-stub}
+      # host.docker.internal reaches an Ollama running on the host.
+      RAG_OLLAMA_HOST: ${RAG_OLLAMA_HOST:-http://host.docker.internal:11434}
+      RAG_OLLAMA_MODEL: ${RAG_OLLAMA_MODEL:-qwen2.5:7b-instruct}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  rag-storage:
+  hf-models:

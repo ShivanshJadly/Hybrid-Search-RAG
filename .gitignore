@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Live API key.
+.env
+
+# Claude Code's local permission cache. Project-wide Claude config
+# (.claude/settings.json, commands/, skills/) is shareable and belongs in git.
+.claude/settings.local.json
+
+# Indexes are rebuilt by `python -m rag ingest-all --rebuild`; eval reports are
+# kept, because they are the evidence a real model run happened.
+storage/*
+!storage/eval/

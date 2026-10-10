@@ -1,0 +1,7 @@
+Changelog
+
+2026-08-14  Raised default DATABASE_POOL_SIZE from 10 to 20 for all services.
+2026-08-02  Added CACHE_TTL_JITTER_PERCENT to the shared cache client.
+2026-07-21  Deployment ledger history extended from 30 to 90 days.
+2026-07-05  Canary policy thresholds moved into canary-policy.yaml.
+2026-06-30  ERR_REGISTRY_4041 now names the missing digest in the message.

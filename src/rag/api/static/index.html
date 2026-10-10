@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hybrid RAG — Internal Docs</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #fff; --ink: #1c1c1a; --muted: #6b6b66;
+    --line: #e4e4e0; --accent: #2f6f4f; --accent-soft: #e8f2ec;
+    --warn: #a8621b; --bad: #a33a2a; --good: #2f6f4f;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16171a; --panel: #1d1f23; --ink: #e8e8e4; --muted: #9a9a94;
+      --line: #2e3136; --accent: #7fc4a0; --accent-soft: #21302a;
+      --warn: #d9a05b; --bad: #e08573; --good: #7fc4a0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 28px 20px 80px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 22px; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .status { float: right; font-size: 12px; color: var(--muted); text-align: right; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot.on { background: var(--good); } .dot.off { background: var(--bad); }
+
+  .ask { display: flex; gap: 8px; margin-bottom: 12px; }
+  input[type=text] {
+    flex: 1; padding: 11px 13px; font-size: 15px; font-family: inherit;
+    border: 1px solid var(--line); border-radius: 7px;
+    background: var(--panel); color: var(--ink);
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 11px 20px; font-size: 15px; font-family: inherit; font-weight: 500;
+    border: 0; border-radius: 7px; background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: center;
+    padding: 12px 14px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 7px; margin-bottom: 22px; font-size: 13px;
+  }
+  .controls label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  select { font-family: inherit; font-size: 13px; padding: 4px 6px;
+           border: 1px solid var(--line); border-radius: 5px;
+           background: var(--bg); color: var(--ink); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; padding: 18px 20px; margin-bottom: 18px; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+              color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+
+  .answer { font-size: 16px; line-height: 1.65; white-space: pre-wrap; }
+  .cite {
+    display: inline-block; min-width: 19px; padding: 0 5px; margin: 0 1px;
+    font-size: 12px; font-weight: 600; text-align: center; cursor: pointer;
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid transparent; border-radius: 4px; vertical-align: baseline;
+  }
+  .cite:hover, .cite:focus { border-color: var(--accent); outline: none; }
+
+  .declined { color: var(--warn); }
+
+  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .meter .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .meter .val { font-size: 20px; font-variant-numeric: tabular-nums; margin: 2px 0 5px; }
+  .meter .val.na { color: var(--muted); font-style: italic; }
+  .meter .na-note { font-size: 11px; color: var(--muted); }
+  .scale-note { font-size: 12px; color: var(--muted); margin: 10px 0 0; max-width: 60ch; }
+  .bar { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .reasons { margin: 14px 0 0; padding: 0 0 0 18px; color: var(--muted); font-size: 13px; }
+
+  .chunk { border: 1px solid var(--line); border-radius: 7px; padding: 12px 14px; margin-bottom: 10px; }
+  .chunk.hi { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .chunk .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+  .num { font-weight: 700; color: var(--accent); font-size: 13px; }
+  .cit { font-family: var(--mono); font-size: 12px; color: var(--muted); flex: 1; min-width: 200px; }
+  .tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+         padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+  .tag.dense { background: #e6eef8; color: #2c5c94; }
+  .tag.sparse { background: #f6ecdd; color: #8a5a1e; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tag.dense { background: #1e2c3d; color: #8fb8e6; }
+    :root:not([data-theme="light"]) .tag.sparse { background: #33281a; color: #d9a86b; }
+  }
+  .scores { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .body { font-size: 13.5px; color: var(--ink); max-height: 90px; overflow: hidden;
+          position: relative; transition: max-height .2s; }
+  .body.open { max-height: none; }
+  .more { font-size: 12px; color: var(--accent); cursor: pointer; margin-top: 4px; display: inline-block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); border-bottom: 1px solid var(--line); padding: 6px 8px 6px 0; font-weight: 600; }
+  td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .v { font-weight: 600; font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+  .v.SUPPORTED { background: var(--accent-soft); color: var(--good); }
+  .v.PARTIAL, .v.UNCITED { background: #f7eddc; color: var(--warn); }
+  .v.UNSUPPORTED, .v.DANGLING { background: #f8e4e0; color: var(--bad); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .v.PARTIAL,
+    :root:not([data-theme="light"]) .v.UNCITED { background: #362c1b; }
+    :root:not([data-theme="light"]) .v.UNSUPPORTED,
+    :root:not([data-theme="light"]) .v.DANGLING { background: #3a241f; }
+  }
+  .empty { color: var(--muted); font-size: 13px; }
+  .err { color: var(--bad); }
+  .spin { color: var(--muted); font-size: 14px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="status" id="status">checking…</div>
+    <h1>Hybrid RAG — Internal Docs</h1>
+    <div class="sub">Dense + sparse retrieval, RRF fusion, cross-encoder reranking, verified citations.</div>
+  </header>
+
+  <form class="ask" id="form">
+    <input type="text" id="q" placeholder="Ask about deploys, incidents, retention…" autocomplete="off">
+    <button type="submit" id="go">Ask</button>
+  </form>
+
+  <div class="controls">
+    <label>Chunking
+      <select id="strategy">
+        <option value="header" selected>header</option>
+        <option value="fixed">fixed</option>
+        <option value="semantic">semantic</option>
+      </select>
+    </label>
+    <label>Retrieval
+      <select id="mode">
+        <option value="hybrid" selected>hybrid (dense + sparse)</option>
+        <option value="dense">dense only</option>
+        <option value="sparse">sparse only</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="rerank" checked> rerank</label>
+    <label><input type="checkbox" id="verify" checked> verify citations</label>
+    <label>Top-k <select id="topk">
+      <option>3</option><option selected>5</option><option>8</option><option>10</option>
+    </select></label>
+  </div>
+
+  <div id="out"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+fetch("/healthz").then(r => r.json()).then(h => {
+  $("status").innerHTML =
+    `<span class="dot ${h.generator_reachable ? "on" : "off"}"></span>gen ${esc(h.generator || "—")}<br>` +
+    `<span class="dot ${h.judge_reachable ? "on" : "off"}"></span>judge ${esc(h.judge || "—")}`;
+}).catch(() => $("status").textContent = "backend unreachable");
+
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const question = $("q").value.trim();
+  if (!question) return;
+
+  const mode = $("mode").value;
+  $("go").disabled = true;
+  $("out").innerHTML = '<div class="panel spin">Retrieving and generating…</div>';
+
+  try {
+    const res = await fetch("/v1/ask", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        question,
+        strategy: $("strategy").value,
+        top_k: +$("topk").value,
+        use_dense: mode !== "sparse",
+        use_sparse: mode !== "dense",
+        rerank: $("rerank").checked,
+        verify_citations: $("verify").checked
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    render(data);
+  } catch (err) {
+    $("out").innerHTML = `<div class="panel err">Request failed: ${esc(err.message)}</div>`;
+  } finally {
+    $("go").disabled = false;
+  }
+});
+
+function render(d) {
+  const c = d.confidence;
+  const answer = esc(d.answer).replace(/\[(\d{1,2})\]/g,
+    (_, n) => `<span class="cite" data-n="${n}" tabindex="0" role="button">${n}</span>`);
+
+  // v === null means the component had nothing to measure. Showing it as
+  // 100% would read as "everything checked out" when nothing was checked.
+  const meter = (label, v, note) => v === null || v === undefined ? `
+    <div class="meter"><div class="label">${label}</div>
+      <div class="val na">n/a</div>
+      <div class="na-note">${note || "nothing to measure"}</div></div>` : `
+    <div class="meter"><div class="label">${label}</div>
+      <div class="val">${(v * 100).toFixed(0)}%</div>
+      <div class="bar"><i style="width:${Math.max(2, v * 100).toFixed(0)}%"></i></div></div>`;
+
+  const chunks = d.sources.map(s => `
+    <div class="chunk" id="src-${s.n}">
+      <div class="head">
+        <span class="num">[${s.n}]</span>
+        <span class="cit">${esc(s.citation)}</span>
+        <span class="tag ${s.found_by}">${esc(s.found_by)}</span>
+        <span class="scores">${s.rerank_score !== null
+          ? "rerank " + s.rerank_score.toFixed(3)
+          : "rrf " + s.rrf_score.toFixed(5)}${
+          s.dense_rank ? " · d#" + s.dense_rank : ""}${
+          s.sparse_rank ? " · s#" + s.sparse_rank : ""}</span>
+      </div>
+      <div class="body" id="body-${s.n}">${esc(s.text)}</div>
+      <span class="more" data-n="${s.n}">show more</span>
+    </div>`).join("");
+
+  const cites = d.citations.length ? `
+    <table><thead><tr><th>Verdict</th><th>Claim</th><th>Source</th><th>Reason</th></tr></thead>
+    <tbody>${d.citations.map(x => `<tr>
+      <td><span class="v ${esc(x.verdict)}">${esc(x.verdict)}</span></td>
+      <td>${esc(x.claim)}</td>
+      <td class="cit">${x.citation_id ? "[" + x.citation_id + "] " : ""}${esc(x.source)}</td>
+      <td class="empty">${esc(x.reason)}</td></tr>`).join("")}</tbody></table>`
+    : '<div class="empty">No citations were checked.</div>';
+
+  const r = d.retrieval;
+  $("out").innerHTML = `
+    <div class="panel">
+      <h2>Answer ${d.declined ? '· <span class="declined">declined</span>' : ""}</h2>
+      <div class="answer">${answer}</div>
+    </div>
+    <div class="panel">
+      <h2>${c.kind === "refusal" ? "Confidence — refusal · " : "Confidence — "}${esc(c.label)} (${(c.composite * 100).toFixed(0)}%)</h2>
+      <div class="meters">
+        ${meter("Retrieval", c.retrieval)}
+        ${meter("Citation coverage", c.coverage, "no claims made")}
+        ${meter("Citation accuracy", c.citation_accuracy, "no citations to check")}
+        ${meter(c.kind === "refusal" ? "Refusal confidence" : "Composite", c.composite)}
+      </div>
+      ${c.kind === "refusal" ? `<p class="scale-note">Scored as a refusal:
+        this is confidence that declining was correct, not the quality of an
+        answer. It runs inverse to retrieval &mdash; strong material plus a
+        refusal is a false refusal.</p>` : ""}
+      <ul class="reasons">${c.reasons.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+    </div>
+    <div class="panel">
+      <h2>Retrieved chunks — ${r.dense_hits} dense, ${r.sparse_hits} sparse,
+          ${r.overlap} in both${r.reranked ? ", reranked" : ""}</h2>
+      ${chunks || '<div class="empty">Nothing retrieved.</div>'}
+    </div>
+    <div class="panel"><h2>Citation verification</h2>${cites}</div>`;
+
+  document.querySelectorAll(".cite").forEach(el =>
+    el.addEventListener("click", () => {
+      const t = $("src-" + el.dataset.n);
+      if (!t) return;
+      document.querySelectorAll(".chunk").forEach(x => x.classList.remove("hi"));
+      t.classList.add("hi");
+      $("body-" + el.dataset.n).classList.add("open");
+      t.scrollIntoView({behavior: "smooth", block: "center"});
+    }));
+
+  document.querySelectorAll(".more").forEach(el =>
+    el.addEventListener("click", () => {
+      const b = $("body-" + el.dataset.n);
+      b.classList.toggle("open");
+      el.textContent = b.classList.contains("open") ? "show less" : "show more";
+    }));
+}
+</script>
+</body>
+</html>

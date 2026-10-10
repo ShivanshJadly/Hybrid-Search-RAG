@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Engineering Onboarding</title>
+  <style>body { font-family: sans-serif; }</style>
+</head>
+<body>
+<nav><a href="/">Home</a> <a href="/docs">Docs</a></nav>
+
+<h1>Engineering Onboarding</h1>
+<p>Welcome to the engineering organisation. This page covers what to set up in
+your first week and who to ask when something is unclear. It is maintained by
+the developer experience team and updated at the start of every quarter.</p>
+
+<h2>Day One: Accounts and Access</h2>
+<p>Your manager requests your accounts before you start, but several of them
+need action from you. Check that you can sign in to the identity provider, the
+source control system, the ticket tracker and the observability platform.</p>
+<p>Access to production is not granted on day one and is not granted by default
+at all. It requires completing the production access training and being added to
+an on-call rotation. Most engineers do not need production access to do their
+work, and requesting it reflexively is discouraged.</p>
+
+<h2>Development Environment</h2>
+<p>The supported setup is a container-based development environment. Clone the
+monorepo, run the bootstrap script, and the script provisions everything else.
+The first run takes roughly forty minutes because it builds the base images
+locally.</p>
+<p>Native installs are not supported. They work for some people and break for
+others, and the time the platform team spends debugging bespoke local setups is
+time not spent on the shared tooling. If the container environment does not work
+for you, raise it as a bug rather than working around it.</p>
+
+<h3>Common bootstrap failures</h3>
+<p>If the bootstrap script fails with a disk space error, it needs at least
+sixty gigabytes free. The base images alone are around twenty-five gigabytes
+and the build cache grows from there.</p>
+<p>If it fails during dependency resolution, the usual cause is a stale lockfile
+from a previous checkout. Delete the cache directory and re-run rather than
+attempting to repair it by hand.</p>
+
+<h2>How We Work</h2>
+<p>Changes go through pull request review. Every pull request needs one approval
+from someone who owns the affected area. Ownership is declared in the CODEOWNERS
+file and the review request is assigned automatically.</p>
+<p>Small pull requests are reviewed quickly and large ones are not. A change over
+roughly four hundred lines will sit for significantly longer, not because
+reviewers are unwilling but because a large diff cannot be reviewed properly in
+the gaps between other work. Splitting work into reviewable pieces is a skill
+worth developing early.</p>
+
+<h2>Where to Ask</h2>
+<p>Ask in the open channel for your area rather than direct-messaging an
+individual. Direct messages get faster answers for you and no answer for the
+next person with the same question. Channel questions become searchable
+history.</p>
+<p>There is no expectation that you work things out alone. The rule of thumb is
+to spend thirty minutes trying, then ask. Spending a day stuck on something a
+colleague could resolve in two minutes is a worse outcome for everyone than
+asking early.</p>
+
+<footer><p>Maintained by Developer Experience. Last reviewed this quarter.</p></footer>
+</body>
+</html>

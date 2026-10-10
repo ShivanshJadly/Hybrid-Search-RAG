@@ -1,0 +1,376 @@
+# Golden question set for the sample corpus.
+#
+# Four categories, as the plan requires:
+#   lookup    - the answer sits in one place and is stated plainly
+#   multihop  - needs two or more facts, often across documents
+#   no_answer - plausible question the corpus genuinely cannot answer;
+#               the correct behaviour is to decline, not to guess
+#   ambiguous - underspecified; a good answer names the ambiguity
+#
+# expected_sources drives retrieval scoring. It lists the file(s) that
+# actually contain the answer, so retrieval can be measured independently
+# of whether the model wrote a good sentence.
+
+- id: q001
+  category: lookup
+  question: What environment variable holds the deploy token?
+  expected_answer: DEPLOY_TOKEN.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q002
+  category: lookup
+  question: How often does the deploy token rotate?
+  expected_answer: Every ninety days.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q003
+  category: lookup
+  question: What error code appears when the deploy token has expired?
+  expected_answer: ERR_AUTH_4011.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q004
+  category: lookup
+  question: What is the minimum CLI version required for deployments?
+  expected_answer: Version 2.4 or later.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q005
+  category: lookup
+  question: What is the hard timeout for the build stage?
+  expected_answer: Twenty minutes.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q006
+  category: lookup
+  question: Which setting extends the build timeout?
+  expected_answer: BUILD_TIMEOUT_MINUTES in the service manifest.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q007
+  category: lookup
+  question: Above what build timeout value does the platform team review the request?
+  expected_answer: Any value above forty minutes.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q008
+  category: lookup
+  question: What are the three deployment environments, in order?
+  expected_answer: Development, staging, then production.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q009
+  category: lookup
+  question: Are images promoted by tag or by digest?
+  expected_answer: Always by digest. Tag-based promotion is refused outright.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q010
+  category: lookup
+  question: Who can approve a promotion to production?
+  expected_answer: Anyone other than the commit author.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q011
+  category: lookup
+  question: What percentage of traffic goes to a canary, and for how long?
+  expected_answer: Ten percent of traffic for fifteen minutes.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q012
+  category: lookup
+  question: Which file holds the canary comparison thresholds?
+  expected_answer: canary-policy.yaml at the repository root.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q013
+  category: lookup
+  question: What are the default canary thresholds?
+  expected_answer: A 0.5 percent absolute increase in error rate, or a 20 percent relative increase in p99 latency.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q014
+  category: lookup
+  question: How long does the deployment ledger keep history?
+  expected_answer: Ninety days per service.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q015
+  category: lookup
+  question: Do rollbacks run a canary stage?
+  expected_answer: No, they skip it by default. It can be enabled with ROLLBACK_CANARY_ENABLED.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q016
+  category: lookup
+  question: What error code means the promoted digest is missing from the registry?
+  expected_answer: ERR_REGISTRY_4041.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q017
+  category: lookup
+  question: Which endpoint does the pipeline poll for health?
+  expected_answer: /healthz, expecting a 200 response.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q018
+  category: lookup
+  question: How many severity levels are there and what are they?
+  expected_answer: Four, SEV1 through SEV4.
+  expected_sources: [incident-runbook.md, oncall-quickref.md]
+  answerable: true
+
+- id: q019
+  category: lookup
+  question: How often are updates expected during a SEV1?
+  expected_answer: Every fifteen minutes.
+  expected_sources: [incident-runbook.md, oncall-quickref.md]
+  answerable: true
+
+- id: q020
+  category: lookup
+  question: What does a SEV3 trigger?
+  expected_answer: A ticket, not a page.
+  expected_sources: [incident-runbook.md, oncall-quickref.md]
+  answerable: true
+
+- id: q021
+  category: lookup
+  question: What error code indicates database connection exhaustion?
+  expected_answer: ERR_DB_5031.
+  expected_sources: [incident-runbook.md]
+  answerable: true
+
+- id: q022
+  category: lookup
+  question: What is the default DATABASE_POOL_SIZE?
+  expected_answer: Twenty per instance.
+  expected_sources: [incident-runbook.md, changelog.txt]
+  answerable: true
+
+- id: q023
+  category: lookup
+  question: Which setting fixes a cache stampede, and what value is suggested?
+  expected_answer: CACHE_TTL_JITTER_PERCENT, starting around ten percent.
+  expected_sources: [incident-runbook.md]
+  answerable: true
+
+- id: q024
+  category: lookup
+  question: What is the default for QUEUE_MAX_REDELIVERIES?
+  expected_answer: Five.
+  expected_sources: [incident-runbook.md]
+  answerable: true
+
+- id: q025
+  category: lookup
+  question: Who writes customer-facing incident updates?
+  expected_answer: The incident commander, not the engineers debugging.
+  expected_sources: [incident-runbook.md]
+  answerable: true
+
+- id: q026
+  category: lookup
+  question: How long after an incident is a retrospective due?
+  expected_answer: Within five working days, for SEV1 and SEV2.
+  expected_sources: [incident-runbook.md]
+  answerable: true
+
+- id: q027
+  category: lookup
+  question: How long are audit trails retained?
+  expected_answer: Seven years, and they are immutable.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q028
+  category: lookup
+  question: How long are application logs kept in hot storage?
+  expected_answer: Thirty days, then eleven months in cold storage.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q029
+  category: lookup
+  question: How long is operational telemetry retained and why the odd figure?
+  expected_answer: Thirteen months, so year-over-year comparisons still work at the end of a reporting period.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q030
+  category: lookup
+  question: How long does a deletion request take to process?
+  expected_answer: Within thirty days.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q031
+  category: lookup
+  question: How long do production data access approvals last?
+  expected_answer: Eight hours.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q032
+  category: lookup
+  question: How much free disk space does the bootstrap script need?
+  expected_answer: At least sixty gigabytes.
+  expected_sources: [onboarding.html]
+  answerable: true
+
+- id: q033
+  category: lookup
+  question: How long does the first bootstrap run take?
+  expected_answer: Roughly forty minutes, because it builds base images locally.
+  expected_sources: [onboarding.html]
+  answerable: true
+
+- id: q034
+  category: lookup
+  question: Where is code ownership declared?
+  expected_answer: In the CODEOWNERS file.
+  expected_sources: [onboarding.html]
+  answerable: true
+
+- id: q035
+  category: lookup
+  question: How long should you try something before asking for help?
+  expected_answer: About thirty minutes.
+  expected_sources: [onboarding.html]
+  answerable: true
+
+- id: q036
+  category: lookup
+  question: How long until an unacknowledged page escalates?
+  expected_answer: Ten minutes to the on-call manager, then ten more to the engineering director.
+  expected_sources: [oncall-quickref.md]
+  answerable: true
+
+- id: q037
+  category: multihop
+  question: If a bad deploy ran a database migration, what does rolling back actually fix?
+  expected_answer: Only the running code. Rollbacks do not revert migrations, feature flags or durable storage, so the older code may read a schema it does not understand.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q038
+  category: multihop
+  question: A deploy went out twenty minutes ago and latency is climbing. What should happen first?
+  expected_answer: Declare the incident, then check the deployment ledger and roll back before debugging, since most incidents follow a recent deploy.
+  expected_sources: [incident-runbook.md, deploy-guide.md]
+  answerable: true
+
+- id: q039
+  category: multihop
+  question: Why can rolling back beyond ninety days fail?
+  expected_answer: The ledger only keeps ninety days, and older images may have been pruned from the registry, so the digest no longer exists and a rebuild from tag is needed.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q040
+  category: multihop
+  question: How can autoscaling cause a database incident?
+  expected_answer: Total connections are pool size times instance count, so scaling the application tier past the database connection limit exhausts it and produces ERR_DB_5031.
+  expected_sources: [incident-runbook.md]
+  answerable: true
+
+- id: q041
+  category: multihop
+  question: Why can a deletion request not fully remove a record immediately?
+  expected_answer: Backups are immutable snapshots, so the record is suppressed on restore and ages out with the thirty-five day backup window.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q042
+  category: multihop
+  question: A new engineer wants production access on day one to debug. Is that possible?
+  expected_answer: No. Production access requires completing training and joining an on-call rotation, and is not granted on day one.
+  expected_sources: [onboarding.html]
+  answerable: true
+
+- id: q043
+  category: multihop
+  question: What changed about connection pool defaults and where is it recorded?
+  expected_answer: DATABASE_POOL_SIZE was raised from 10 to 20 on 2026-08-14, recorded in the changelog.
+  expected_sources: [changelog.txt, incident-runbook.md]
+  answerable: true
+
+- id: q044
+  category: no_answer
+  question: What is the company's parental leave policy?
+  expected_answer: null
+  expected_sources: []
+  answerable: false
+
+- id: q045
+  category: no_answer
+  question: Which cloud provider hosts the production database?
+  expected_answer: null
+  expected_sources: []
+  answerable: false
+
+- id: q046
+  category: no_answer
+  question: What is the annual infrastructure budget?
+  expected_answer: null
+  expected_sources: []
+  answerable: false
+
+- id: q047
+  category: no_answer
+  question: Who is the current on-call engineer this week?
+  expected_answer: null
+  expected_sources: []
+  answerable: false
+
+- id: q048
+  category: no_answer
+  question: What is the SLA credit for a SEV1 outage?
+  expected_answer: null
+  expected_sources: []
+  answerable: false
+
+- id: q049
+  category: ambiguous
+  question: How long is data kept?
+  expected_answer: It depends on the class of data. Customer records last the account plus seven years, logs thirty days hot and eleven months cold, telemetry thirteen months, audit trails seven years.
+  expected_sources: [data-retention-policy.pdf]
+  answerable: true
+
+- id: q050
+  category: ambiguous
+  question: What is the timeout?
+  expected_answer: Ambiguous. The build stage times out at twenty minutes; the deploy stage fails with ERR_DEPLOY_5030 after its own stage timeout.
+  expected_sources: [deploy-guide.md]
+  answerable: true
+
+- id: q051
+  category: ambiguous
+  question: How do I get access?
+  expected_answer: Ambiguous. Day-one accounts are requested by your manager; production data access needs an approved request tied to a ticket and expires after eight hours.
+  expected_sources: [onboarding.html, data-retention-policy.pdf]
+  answerable: true
+
+- id: q052
+  category: ambiguous
+  question: What is the retention window?
+  expected_answer: Ambiguous. It could mean the deployment ledger at ninety days, registry retention at sixty days for development and one year for production, or the data retention policy periods.
+  expected_sources: [deploy-guide.md, data-retention-policy.pdf]
+  answerable: true
