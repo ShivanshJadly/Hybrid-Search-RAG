@@ -32,7 +32,11 @@ Rules:
 INSUFFICIENT = "INSUFFICIENT_CONTEXT"
 
 _CITATION = re.compile(r"\[(\d{1,2})\]")
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'\[])")
+# Avoid splitting on common abbreviations like e.g., i.e., Fig., No., vs., etc.
+_ABBREV = r"(?:e\.g|i\.e|etc|vs|v|Fig|fig|No|no|Dr|Mr|Mrs|Ms|Prof|Inc|Ltd|Jr|Sr)"
+_SENTENCE_SPLIT = re.compile(
+    rf"(?<=[.!?])(?<!\b{_ABBREV}\.)(?<!\b[A-Z]\.)\s+(?=[A-Z(\"'\[])"
+)
 
 
 @dataclass

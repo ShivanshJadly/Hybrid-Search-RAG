@@ -60,10 +60,12 @@ class RetrievedChunk:
 
     def citation(self) -> str:
         cite = self.meta.get("source_name", "?")
-        if self.meta.get("heading_path"):
-            cite += f" > {self.meta['heading_path']}"
-        if self.meta.get("page"):
-            cite += f" > p.{self.meta['page']}"
+        heading_path = self.meta.get("heading_path")
+        if heading_path:
+            cite += f" > {heading_path}"
+        page = self.meta.get("page")
+        if page:
+            cite += f" > p.{page}"
         return cite
 
 
