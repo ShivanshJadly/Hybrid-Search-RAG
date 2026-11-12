@@ -54,8 +54,9 @@ behaviours.
 every ingest asserts the counts match. Drift between Chroma and BM25 would
 silently degrade Phase 2 fusion with nothing raising.
 
-**Chunk IDs are content-derived**, so re-ingesting an unchanged corpus is
-idempotent rather than duplicating every chunk.
+**Chunk IDs are content-derived**, so re-ingesting an unchanged corpus does not
+duplicate chunks. Each strategy also records an exact source-file hash, so an
+unchanged file skips loading, chunking, and embedding for that strategy.
 
 **Chunk size is validated against the embedding model's token limit at
 startup.** `bge-small-en-v1.5` truncates past 512 tokens without warning — an

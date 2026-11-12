@@ -43,6 +43,7 @@ def _report_panel(report) -> Panel:
     t = Table(show_header=False, box=None, pad_edge=False)
     t.add_row("Files found", str(report.files_found))
     t.add_row("Files loaded", str(report.files_loaded))
+    t.add_row("Files unchanged", str(report.files_unchanged))
     t.add_row("Documents stored (raw+processed)", str(report.documents_stored))
     t.add_row("Chunks built", str(report.chunks_built))
     t.add_row("Exact duplicates dropped", str(report.exact_duplicates))

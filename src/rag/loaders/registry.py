@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from ..models import LoadedDocument
@@ -27,6 +28,12 @@ def load_file(path: Path, root: Path) -> LoadedDocument:
         raise UnsupportedFileType(f"No loader for '{ext}' ({path.name})")
     source = path.relative_to(root).as_posix()
     return loader.load(path, source)
+
+
+def source_fingerprint(path: Path) -> str:
+    """Hash the exact source bytes without invoking a format-specific loader."""
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
 
 
 def discover(root: Path) -> list[Path]:

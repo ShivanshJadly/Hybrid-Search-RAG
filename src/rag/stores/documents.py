@@ -29,8 +29,24 @@ class DocumentStore:
     def _path(self, doc_id: str) -> Path:
         return self.dir / f"{doc_id}.json"
 
-    def save(self, doc: LoadedDocument) -> Path:
+    def save(
+        self,
+        doc: LoadedDocument,
+        *,
+        content_hash: str | None = None,
+        strategy: str | None = None,
+    ) -> Path:
+        if (content_hash is None) != (strategy is None):
+            raise ValueError("content_hash and strategy must be provided together")
         self.dir.mkdir(parents=True, exist_ok=True)
+        path = self._path(doc.doc_id)
+        content_hashes: dict[str, str] = {}
+        if strategy is not None and path.exists():
+            previous = json.loads(path.read_text(encoding="utf-8"))
+            content_hashes = previous.get("content_hashes", {})
+        if strategy is not None:
+            assert content_hash is not None
+            content_hashes[strategy] = content_hash
         payload = {
             "doc_id": doc.doc_id,
             "source": doc.source,
@@ -41,9 +57,39 @@ class DocumentStore:
             "anchors": [asdict(a) for a in doc.anchors],
             "extra": doc.extra,
         }
-        path = self._path(doc.doc_id)
+        if content_hashes:
+            payload["content_hashes"] = content_hashes
         path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return path
+
+    def content_hash(self, doc_id: str, strategy: str) -> str | None:
+        path = self._path(doc_id)
+        if not path.exists():
+            return None
+        blob = json.loads(path.read_text(encoding="utf-8"))
+        return blob.get("content_hashes", {}).get(strategy)
+
+    def invalidate_fingerprint(self, strategy: str) -> None:
+        if not self.dir.exists():
+            return
+        for path in self.dir.glob("*.json"):
+            blob = json.loads(path.read_text(encoding="utf-8"))
+            content_hashes = blob.get("content_hashes", {})
+            if strategy not in content_hashes:
+                continue
+            del content_hashes[strategy]
+            if content_hashes:
+                blob["content_hashes"] = content_hashes
+            else:
+                blob.pop("content_hashes", None)
+            path.write_text(json.dumps(blob, ensure_ascii=False), encoding="utf-8")
+
+    def delete(self, doc_id: str) -> bool:
+        path = self._path(doc_id)
+        if not path.exists():
+            return False
+        path.unlink()
+        return True
 
     def load(self, doc_id: str) -> LoadedDocument | None:
         path = self._path(doc_id)

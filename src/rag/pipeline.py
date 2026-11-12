@@ -20,19 +20,21 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 
 from .chunking.builder import build_chunks
 from .chunking.registry import get_strategy
 from .config import Settings
 from .dedup import drop_near_duplicates
 from .embeddings import LocalEmbedder
-from .loaders.registry import discover, load_file
-from .models import Chunk, content_fingerprint
+from .loaders.registry import discover, load_file, source_fingerprint
+from .models import Chunk, LoadedDocument, content_fingerprint, make_doc_id
 from .stores.bm25 import Bm25Store
 from .stores.documents import DocumentStore
 from .stores.vector import VectorStore
 
 log = logging.getLogger(__name__)
+_INGEST_LOCK = Lock()
 
 
 @dataclass
@@ -40,6 +42,7 @@ class IngestReport:
     strategy: str
     files_found: int = 0
     files_loaded: int = 0
+    files_unchanged: int = 0
     files_failed: list[tuple[str, str]] = field(default_factory=list)
     documents_stored: int = 0
     chunks_built: int = 0
@@ -68,6 +71,18 @@ def ingest(
     strategy_name: str = "fixed",
     rebuild: bool = False,
 ) -> IngestReport:
+    # FastAPI background tasks can overlap while these stores share state.
+    with _INGEST_LOCK:
+        return _ingest_serialized(root, settings, embedder, strategy_name, rebuild)
+
+
+def _ingest_serialized(
+    root: Path,
+    settings: Settings,
+    embedder: LocalEmbedder,
+    strategy_name: str = "fixed",
+    rebuild: bool = False,
+) -> IngestReport:
     settings.ensure_dirs()
     embedder.validate()  # refuses to run if chunks would be silently truncated
 
@@ -86,6 +101,7 @@ def ingest(
 
     if rebuild:
         log.info("Rebuilding indexes for strategy %s", strategy_name)
+        doc_store.invalidate_fingerprint(strategy_name)
         vector_store.reset()
         bm25_store.reset()
 
@@ -94,8 +110,18 @@ def ingest(
 
     # --- load + chunk ---
     all_chunks: list[Chunk] = []
+    changed_docs: list[tuple[LoadedDocument, str]] = []
     for path in paths:
+        source = path.relative_to(root).as_posix()
+        doc_id = make_doc_id(source)
         try:
+            source_hash = source_fingerprint(path)
+            if (
+                not rebuild
+                and doc_store.content_hash(doc_id, strategy_name) == source_hash
+            ):
+                report.files_unchanged += 1
+                continue
             doc = load_file(path, root)
         except Exception as exc:  # a single bad PDF must not kill the run
             log.warning("Failed to load %s: %s", path.name, exc)
@@ -103,11 +129,7 @@ def ingest(
             continue
 
         report.files_loaded += 1
-
-        # Persisted before the empty check, so a document that extracted to
-        # nothing still leaves its raw form on disk to be diagnosed with.
-        doc_store.save(doc)
-        report.documents_stored += 1
+        changed_docs.append((doc, source_hash))
 
         if not doc.text.strip():
             # Common with scanned PDFs that contain images rather than text.
@@ -132,8 +154,25 @@ def ingest(
     report.exact_duplicates = len(all_chunks) - len(unique)
 
     if not unique:
+        if changed_docs:
+            for doc, _ in changed_docs:
+                vector_store.delete(doc.doc_id, source=doc.source)
+                bm25_store.delete(doc.doc_id, source=doc.source)
+            bm25_store.save()
         report.vector_count = vector_store.count()
         report.bm25_count = bm25_store.count()
+        if changed_docs:
+            if not report.in_sync:
+                raise IndexSyncError(
+                    f"Index drift for strategy '{strategy_name}': "
+                    f"Chroma has {report.vector_count} chunks, "
+                    f"BM25 has {report.bm25_count}. Re-run with --rebuild."
+                )
+            for doc, source_hash in changed_docs:
+                doc_store.save(
+                    doc, content_hash=source_hash, strategy=strategy_name
+                )
+                report.documents_stored += 1
         return report
 
     report.max_chunk_tokens = max(c.meta.n_tokens for c in unique)
@@ -147,6 +186,9 @@ def ingest(
     report.duplicate_examples = deduped.examples
 
     # --- write both indexes from the same list ---
+    for doc, _ in changed_docs:
+        vector_store.delete(doc.doc_id, source=doc.source)
+        bm25_store.delete(doc.doc_id, source=doc.source)
     vector_store.add(deduped.chunks, deduped.vectors)
     bm25_store.add(deduped.chunks)
     bm25_store.save()
@@ -161,6 +203,10 @@ def ingest(
             f"Chroma has {report.vector_count} chunks, BM25 has {report.bm25_count}. "
             f"Re-run with --rebuild."
         )
+
+    for doc, source_hash in changed_docs:
+        doc_store.save(doc, content_hash=source_hash, strategy=strategy_name)
+        report.documents_stored += 1
 
     return report
 

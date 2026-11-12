@@ -12,6 +12,7 @@ model weights on every question.
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -154,6 +155,34 @@ def documents() -> dict:
         except Exception as exc:
             index[strategy] = {"error": str(exc)}
     return {"documents": rows, "indexes": index}
+
+
+@app.delete("/v1/documents/{doc_id}")
+def delete_document(doc_id: str) -> dict:
+    if re.fullmatch(r"[0-9a-f]{16}", doc_id) is None:
+        raise HTTPException(404, "document not found")
+
+    doc_store = DocumentStore(settings.documents_dir)
+    doc = doc_store.load(doc_id)
+    source = doc.source if doc is not None else None
+    deleted_chunks = 0
+
+    for strategy in STRATEGIES:
+        vector = VectorStore(settings.chroma_dir, strategy)
+        deleted_chunks += vector.delete(doc_id, source=source)
+
+        bm25 = Bm25Store(settings.bm25_dir, strategy)
+        was_loaded = bm25.load()
+        removed = bm25.delete(doc_id, source=source)
+        deleted_chunks += removed
+        if was_loaded or removed:
+            bm25.save()
+
+    if doc is None and deleted_chunks == 0:
+        raise HTTPException(404, "document not found")
+
+    doc_store.delete(doc_id)
+    return {"status": "deleted", "doc_id": doc_id}
 
 
 @app.post("/v1/ingest")
