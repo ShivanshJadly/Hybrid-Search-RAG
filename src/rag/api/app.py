@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -26,7 +28,7 @@ from ..chunking.registry import STRATEGIES
 from ..config import settings
 from ..embeddings import LocalEmbedder
 from ..llm.registry import build_judge, build_llm, describe_backend
-from ..pipeline import ingest as run_ingest
+from ..pipeline import IngestReport, ingest as run_ingest
 from ..rerank import build_reranker
 from ..stores.bm25 import Bm25Store
 from ..stores.documents import DocumentStore
@@ -37,6 +39,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 # Populated at startup; one pipeline per chunking strategy.
 _state: dict = {"pipelines": {}, "embedder": None, "llm": None, "judge": None}
+# The synchronous background task runs in a worker thread.
+_ingest_lock = Lock()
 
 
 @asynccontextmanager
@@ -84,6 +88,33 @@ class IngestRequest(BaseModel):
     path: Optional[str] = None
     strategy: str = "header"
     rebuild: bool = False
+
+
+def _run_ingest_in_background(
+    root: Path, embedder: LocalEmbedder, strategy: str, rebuild: bool
+) -> None:
+    try:
+        report: IngestReport = run_ingest(
+            root, settings, embedder, strategy, rebuild
+        )
+        report_data = asdict(report)
+        report_data["in_sync"] = report.in_sync
+    except Exception as exc:
+        log.exception("ingest failed")
+        _state["ingest"] = {
+            "status": "failed",
+            "strategy": strategy,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+    else:
+        _state["ingest"] = {
+            "status": "completed",
+            "strategy": strategy,
+            "report": report_data,
+        }
+    finally:
+        _ingest_lock.release()
 
 
 # ---------------------------------------------------------------- routes
@@ -153,7 +184,11 @@ def documents() -> dict:
             }
         except Exception as exc:
             index[strategy] = {"error": str(exc)}
-    return {"documents": rows, "indexes": index}
+    return {
+        "documents": rows,
+        "indexes": index,
+        "ingest": _state.get("ingest", {"status": "idle"}),
+    }
 
 
 @app.post("/v1/ingest")
@@ -168,11 +203,26 @@ def ingest(req: IngestRequest, background: BackgroundTasks) -> dict:
     if embedder is None:
         raise HTTPException(503, "service still starting")
 
+    if not _ingest_lock.acquire(blocking=False):
+        raise HTTPException(409, "an ingest is already running")
+
+    _state["ingest"] = {"status": "running", "strategy": req.strategy}
+
     # Ingestion is slow enough to exceed a request timeout on a real corpus,
     # so it runs in the background and the caller polls /v1/documents.
-    background.add_task(
-        run_ingest, root, settings, embedder, req.strategy, req.rebuild
-    )
+    try:
+        background.add_task(
+            _run_ingest_in_background, root, embedder, req.strategy, req.rebuild
+        )
+    except Exception as exc:
+        _state["ingest"] = {
+            "status": "failed",
+            "strategy": req.strategy,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        _ingest_lock.release()
+        raise
     return {
         "status": "started",
         "path": str(root),

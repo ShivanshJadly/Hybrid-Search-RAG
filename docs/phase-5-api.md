@@ -92,8 +92,9 @@ needed as a shared server, swap the client in `stores/vector.py` and add the
   the first `docker compose up`.
 - **No auth, no rate limiting, no CORS policy.** Fine for localhost, not for
   anything exposed.
-- **`/v1/ingest` returns immediately with no job id.** Progress is inferred by
-  polling `/v1/documents`; a failure mid-ingest is only visible in server logs.
+- **`/v1/ingest` returns immediately with no job id.** A concurrent request is
+  rejected with `409`; polling `/v1/documents` reports `idle` before the first
+  run, then `running`, `completed` (with its report), or `failed` (with its error).
 - **Model loading happens at startup**, so the first boot after a fresh install
   downloads ~200MB. The Dockerfile bakes them in to avoid this in containers.
 - **Single worker assumed.** Multiple uvicorn workers would each load their own

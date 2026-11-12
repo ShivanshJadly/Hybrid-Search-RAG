@@ -475,6 +475,7 @@ def test_ask_validates_question_length(client):
 def test_documents_endpoint_reports_index_sync(client):
     body = client.get("/v1/documents").json()
     assert "documents" in body and "indexes" in body
+    assert body["ingest"] == {"status": "idle"}
     for strategy in ("fixed", "header", "semantic"):
         assert strategy in body["indexes"]
 
@@ -482,6 +483,133 @@ def test_documents_endpoint_reports_index_sync(client):
 def test_ingest_rejects_a_missing_path(client):
     res = client.post("/v1/ingest", json={"path": "/definitely/not/here"})
     assert res.status_code == 400
+
+
+def test_ingest_rejects_a_second_request_while_background_ingest_runs(
+    client, monkeypatch, tmp_path
+):
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+    from threading import Event, Lock
+
+    from fastapi.testclient import TestClient
+
+    from rag.api import app as api_module
+    from rag.pipeline import IngestReport
+
+    started = Event()
+    release = Event()
+    calls = []
+
+    def blocking_ingest(*args, **kwargs):
+        calls.append(None)
+        started.set()
+        assert release.wait(timeout=5)
+        return IngestReport(strategy="header", vector_count=1, bm25_count=1)
+
+    class FakeStore:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def list_documents(self):
+            return []
+
+        def load(self):
+            return False
+
+        def count(self):
+            return 0
+
+    monkeypatch.setattr(api_module, "_ingest_lock", Lock(), raising=False)
+    monkeypatch.setattr(api_module, "run_ingest", blocking_ingest)
+    monkeypatch.setattr(api_module, "DocumentStore", FakeStore)
+    monkeypatch.setattr(api_module, "VectorStore", FakeStore)
+    monkeypatch.setattr(api_module, "Bm25Store", FakeStore)
+    second_client = TestClient(api_module.app, raise_server_exceptions=False)
+    payload = {"path": str(tmp_path)}
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, "/v1/ingest", json=payload)
+        try:
+            assert started.wait(timeout=5)
+            running_state = second_client.get("/v1/documents").json()["ingest"]
+            assert running_state == {"status": "running", "strategy": "header"}
+            second = pool.submit(second_client.post, "/v1/ingest", json=payload)
+            completed, _ = wait(
+                (first, second), timeout=3, return_when=FIRST_COMPLETED
+            )
+            second_rejected_before_release = second in completed
+        finally:
+            release.set()
+        first_response = first.result(timeout=5)
+        second_response = second.result(timeout=5)
+
+    assert first_response.status_code == 200
+    assert second_rejected_before_release
+    assert second_response.status_code == 409
+    assert len(calls) == 1
+
+
+def test_ingest_failure_is_visible_and_releases_the_single_flight_lock(
+    client, monkeypatch, tmp_path
+):
+    from threading import Lock
+
+    from rag.api import app as api_module
+    from rag.pipeline import IndexSyncError, IngestReport
+
+    calls = []
+
+    def fail_then_succeed(*args, **kwargs):
+        calls.append(None)
+        if len(calls) == 1:
+            raise IndexSyncError("index counts differ")
+        return IngestReport(strategy="header", vector_count=1, bm25_count=1)
+
+    class FakeDocumentStore:
+        def __init__(self, path):
+            pass
+
+        def list_documents(self):
+            return []
+
+    class FakeVectorStore:
+        def __init__(self, path, strategy):
+            pass
+
+        def count(self):
+            return 0
+
+    class FakeBm25Store:
+        def __init__(self, path, strategy):
+            pass
+
+        def load(self):
+            return False
+
+        def count(self):
+            return 0
+
+    monkeypatch.setattr(api_module, "_ingest_lock", Lock(), raising=False)
+    monkeypatch.setattr(api_module, "run_ingest", fail_then_succeed)
+    monkeypatch.setattr(api_module, "DocumentStore", FakeDocumentStore)
+    monkeypatch.setattr(api_module, "VectorStore", FakeVectorStore)
+    monkeypatch.setattr(api_module, "Bm25Store", FakeBm25Store)
+
+    assert client.post("/v1/ingest", json={"path": str(tmp_path)}).status_code == 200
+    failed_state = client.get("/v1/documents").json()["ingest"]
+    assert failed_state == {
+        "status": "failed",
+        "strategy": "header",
+        "error_type": "IndexSyncError",
+        "error": "index counts differ",
+    }
+
+    assert client.post("/v1/ingest", json={"path": str(tmp_path)}).status_code == 200
+    completed_state = client.get("/v1/documents").json()["ingest"]
+    assert completed_state["status"] == "completed"
+    assert completed_state["strategy"] == "header"
+    assert completed_state["report"]["in_sync"] is True
+    assert len(calls) == 2
 
 
 def test_dashboard_is_served(client):
