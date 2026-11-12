@@ -68,10 +68,12 @@ def _print_report(report) -> None:
 
 def _citation(meta: dict) -> str:
     cite = meta.get("source_name", "?")
-    if meta.get("heading_path"):
-        cite += f" > {meta['heading_path']}"
-    if meta.get("page"):
-        cite += f" > p.{meta['page']}"
+    heading_path = meta.get("heading_path")
+    if heading_path:
+        cite += f" > {heading_path}"
+    page = meta.get("page")
+    if page:
+        cite += f" > p.{page}"
     return cite
 
 

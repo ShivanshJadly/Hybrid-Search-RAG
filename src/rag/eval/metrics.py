@@ -160,7 +160,13 @@ def score_retrieval(answer: Answer, golden: GoldenQuestion) -> tuple[bool, float
 
 def _first_word(text: str, allowed: tuple[str, ...], fallback: str) -> str:
     upper = (text or "").upper()
+    # Check for negation before matching positive tokens (e.g. "NOT GROUNDED"
+    # or "UNGROUNDED" must not be mistaken for "GROUNDED").
+    if "UNGROUNDED" in allowed and ("UNGROUNDED" in upper or "NOT GROUNDED" in upper):
+        return "UNGROUNDED"
     for token in allowed:
+        if token == "GROUNDED" and ("NOT GROUNDED" in upper or "UNGROUNDED" in upper):
+            continue
         if token in upper:
             return token
     return fallback

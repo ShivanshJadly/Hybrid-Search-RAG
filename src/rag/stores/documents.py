@@ -51,11 +51,11 @@ class DocumentStore:
             return None
         blob = json.loads(path.read_text(encoding="utf-8"))
         return LoadedDocument(
-            doc_id=blob["doc_id"],
-            source=blob["source"],
-            source_name=blob["source_name"],
-            media_type=blob["media_type"],
-            text=blob["text"],
+            doc_id=blob.get("doc_id", ""),
+            source=blob.get("source", ""),
+            source_name=blob.get("source_name", ""),
+            media_type=blob.get("media_type", ""),
+            text=blob.get("text", ""),
             raw_text=blob.get("raw_text", ""),
             anchors=[Anchor(**a) for a in blob.get("anchors", [])],
             extra=blob.get("extra", {}),

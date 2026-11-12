@@ -11,6 +11,10 @@ __pycache__/
 # (.claude/settings.json, commands/, skills/) is shareable and belongs in git.
 .claude/settings.local.json
 
+# Personal/internal project notes.
+INTERVIEW-PREP.md
+PROJECT-DOCUMENTATION.md
+
 # Indexes are rebuilt by `python -m rag ingest-all --rebuild`; eval reports are
 # kept, because they are the evidence a real model run happened.
 storage/*
