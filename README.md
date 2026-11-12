@@ -6,7 +6,7 @@ a cross-encoder, and answers with inline citations that are **verified rather
 than trusted**.
 
 Retrieval, embedding, chunking and reranking run entirely on local models;
-generation and judging use Gemini's free tier. **106 tests**, all of which run
+generation and judging use Gemini's free tier. **107 tests**, all of which run
 offline — every LLM-dependent path is also covered against a deterministic
 stub, so no API key is needed to run the suite.
 

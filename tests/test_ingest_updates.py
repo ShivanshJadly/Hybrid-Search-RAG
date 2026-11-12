@@ -47,22 +47,23 @@ class FakeEmbedder:
 
 
 class PausingEmbedder(FakeEmbedder):
-    def __init__(self):
+    def __init__(self, pause_version: str = "old"):
         super().__init__()
-        self.old_version_started = Event()
+        self.pause_version = pause_version
+        self.paused_version_started = Event()
         self.new_version_started = Event()
-        self.release_old_version = Event()
+        self.release_paused_version = Event()
 
     def embed_passages(
         self, texts: list[str], show_progress: bool = False
     ) -> np.ndarray:
         combined = "\n".join(texts)
-        if "Version=old" in combined:
-            self.old_version_started.set()
-            if not self.release_old_version.wait(timeout=10):
-                raise TimeoutError("old-version embedding was not released")
         if "Version=new" in combined:
             self.new_version_started.set()
+        if f"Version={self.pause_version}" in combined:
+            self.paused_version_started.set()
+            if not self.release_paused_version.wait(timeout=10):
+                raise TimeoutError("paused-version embedding was not released")
         return super().embed_passages(texts, show_progress)
 
 
@@ -306,7 +307,7 @@ def test_overlapping_background_ingests_leave_the_latest_source_version(tmp_path
     overlapped = False
     first.start()
     try:
-        assert embedder.old_version_started.wait(timeout=10)
+        assert embedder.paused_version_started.wait(timeout=10)
         path.write_text(
             original.replace("Version=old", "Version=new"), encoding="utf-8"
         )
@@ -320,7 +321,7 @@ def test_overlapping_background_ingests_leave_the_latest_source_version(tmp_path
         assert second_started.wait(timeout=10)
         overlapped = embedder.new_version_started.wait(timeout=1)
     finally:
-        embedder.release_old_version.set()
+        embedder.release_paused_version.set()
         first.join(timeout=10)
         if second is not None:
             second.join(timeout=10)
@@ -339,6 +340,66 @@ def test_overlapping_background_ingests_leave_the_latest_source_version(tmp_path
     assert len(vector_records["ids"]) == bm25.count() == 1
     assert "Version=new" in vector_records["documents"][0]
     assert "Version=new" in bm25.texts[0]
+
+
+def test_delete_api_waits_for_inflight_reingest(api_client):
+    _, settings, api_module = api_client
+    original = "# Guide\n\nVersion=old searchable body. " + "Details. " * 20
+    path = _write_document(settings.data_dir, original)
+    doc_id = make_doc_id(path.name)
+    ingest(settings.data_dir, settings, FakeEmbedder(), "fixed")
+
+    path.write_text(
+        original.replace("Version=old", "Version=new"), encoding="utf-8"
+    )
+    embedder = PausingEmbedder(pause_version="new")
+    errors: list[Exception] = []
+    delete_result: list[dict] = []
+    delete_started = Event()
+    delete_finished = Event()
+
+    def run_ingest():
+        try:
+            ingest(settings.data_dir, settings, embedder, "fixed")
+        except Exception as exc:
+            errors.append(exc)
+
+    def run_delete():
+        delete_started.set()
+        try:
+            delete_result.append(api_module.delete_document(doc_id))
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            delete_finished.set()
+
+    ingest_thread = Thread(target=run_ingest, daemon=True)
+    delete_thread: Thread | None = None
+    overlapped = False
+    ingest_thread.start()
+    try:
+        assert embedder.paused_version_started.wait(timeout=10)
+        delete_thread = Thread(target=run_delete, daemon=True)
+        delete_thread.start()
+        assert delete_started.wait(timeout=10)
+        overlapped = delete_finished.wait(timeout=1)
+    finally:
+        embedder.release_paused_version.set()
+        ingest_thread.join(timeout=10)
+        if delete_thread is not None:
+            delete_thread.join(timeout=10)
+
+    assert not ingest_thread.is_alive()
+    assert delete_thread is not None and not delete_thread.is_alive()
+    assert not errors
+    assert not overlapped
+    assert delete_result == [{"status": "deleted", "doc_id": doc_id}]
+    assert DocumentStore(settings.documents_dir).load(doc_id) is None
+    for strategy in _STRATEGIES:
+        assert VectorStore(settings.chroma_dir, strategy).count() == 0
+        bm25 = Bm25Store(settings.bm25_dir, strategy)
+        bm25.load()
+        assert bm25.count() == 0
 
 
 def test_delete_api_removes_document_from_every_strategy(api_client):

@@ -23,7 +23,7 @@ from pathlib import Path
 from threading import Lock
 
 from .chunking.builder import build_chunks
-from .chunking.registry import get_strategy
+from .chunking.registry import STRATEGIES, get_strategy
 from .config import Settings
 from .dedup import drop_near_duplicates
 from .embeddings import LocalEmbedder
@@ -209,6 +209,31 @@ def _ingest_serialized(
         report.documents_stored += 1
 
     return report
+
+
+def delete_document(doc_id: str, settings: Settings) -> bool:
+    with _INGEST_LOCK:
+        doc_store = DocumentStore(settings.documents_dir)
+        doc = doc_store.load(doc_id)
+        source = doc.source if doc is not None else None
+        deleted_chunks = 0
+
+        for strategy in STRATEGIES:
+            vector_store = VectorStore(settings.chroma_dir, strategy)
+            deleted_chunks += vector_store.delete(doc_id, source=source)
+
+            bm25_store = Bm25Store(settings.bm25_dir, strategy)
+            was_loaded = bm25_store.load()
+            removed = bm25_store.delete(doc_id, source=source)
+            deleted_chunks += removed
+            if was_loaded or removed:
+                bm25_store.save()
+
+        if doc is None and deleted_chunks == 0:
+            return False
+
+        doc_store.delete(doc_id)
+        return True
 
 
 def search(

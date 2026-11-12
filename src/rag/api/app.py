@@ -27,6 +27,7 @@ from ..chunking.registry import STRATEGIES
 from ..config import settings
 from ..embeddings import LocalEmbedder
 from ..llm.registry import build_judge, build_llm, describe_backend
+from ..pipeline import delete_document as remove_document
 from ..pipeline import ingest as run_ingest
 from ..rerank import build_reranker
 from ..stores.bm25 import Bm25Store
@@ -161,27 +162,9 @@ def documents() -> dict:
 def delete_document(doc_id: str) -> dict:
     if re.fullmatch(r"[0-9a-f]{16}", doc_id) is None:
         raise HTTPException(404, "document not found")
-
-    doc_store = DocumentStore(settings.documents_dir)
-    doc = doc_store.load(doc_id)
-    source = doc.source if doc is not None else None
-    deleted_chunks = 0
-
-    for strategy in STRATEGIES:
-        vector = VectorStore(settings.chroma_dir, strategy)
-        deleted_chunks += vector.delete(doc_id, source=source)
-
-        bm25 = Bm25Store(settings.bm25_dir, strategy)
-        was_loaded = bm25.load()
-        removed = bm25.delete(doc_id, source=source)
-        deleted_chunks += removed
-        if was_loaded or removed:
-            bm25.save()
-
-    if doc is None and deleted_chunks == 0:
+    if not remove_document(doc_id, settings):
         raise HTTPException(404, "document not found")
 
-    doc_store.delete(doc_id)
     return {"status": "deleted", "doc_id": doc_id}
 
 
