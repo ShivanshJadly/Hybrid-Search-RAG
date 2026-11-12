@@ -11,7 +11,7 @@ import chromadb
 import numpy as np
 from chromadb.config import Settings as ChromaSettings
 
-from ..models import Chunk
+from ..models import Chunk, make_doc_id
 
 
 class VectorStore:
@@ -37,8 +37,27 @@ class VectorStore:
             ids=[c.chunk_id for c in chunks],
             documents=[c.text for c in chunks],
             embeddings=[v.tolist() for v in vectors],
-            metadatas=[c.meta.as_dict() for c in chunks],
+            metadatas=[{**c.meta.as_dict(), "doc_id": c.doc_id} for c in chunks],
         )
+
+    def delete(self, doc_id: str, source: str | None = None) -> int:
+        count_before = self.count()
+        if source is not None:
+            self.collection.delete(where={"source": source})
+        else:
+            records = self.collection.get(include=["metadatas"])
+            chunk_ids = [
+                chunk_id
+                for chunk_id, metadata in zip(records["ids"], records["metadatas"])
+                if metadata.get("doc_id") == doc_id
+                or (
+                    metadata.get("source")
+                    and make_doc_id(metadata["source"]) == doc_id
+                )
+            ]
+            if chunk_ids:
+                self.collection.delete(ids=chunk_ids)
+        return count_before - self.count()
 
     def query(self, vector: np.ndarray, top_k: int) -> list[dict]:
         res = self.collection.query(

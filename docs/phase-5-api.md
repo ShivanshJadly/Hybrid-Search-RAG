@@ -18,6 +18,7 @@ image not built** (see Limitations).
 |---|---|---|
 | `POST` | `/v1/ask` | Answer + citations + confidence + sources + retrieval trace |
 | `GET` | `/v1/documents` | Stored documents and per-strategy index counts |
+| `DELETE` | `/v1/documents/{doc_id}` | Remove one document from all indexes and stored documents |
 | `POST` | `/v1/ingest` | Kick off ingestion in the background |
 | `GET` | `/healthz` | Liveness **and** whether the generator/judge are reachable |
 | `GET` | `/` | Dashboard |
@@ -33,6 +34,10 @@ at a glance, not discovered one question at a time.
 
 Ingestion runs in a `BackgroundTask` — a real corpus takes longer than a
 request timeout — and the caller polls `/v1/documents`.
+
+Use the `doc_id` returned by `GET /v1/documents` to delete a document. The
+operation removes its chunks from every strategy before removing the stored
+document record.
 
 ```bash
 curl -X POST localhost:8000/v1/ask -H 'Content-Type: application/json' \

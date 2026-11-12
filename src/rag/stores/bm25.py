@@ -13,7 +13,7 @@ from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
-from ..models import Chunk
+from ..models import Chunk, make_doc_id
 
 # Keep dotted/underscored identifiers intact. Config keys, error codes and
 # function names are exactly what BM25 is here to catch, and a naive word split
@@ -72,7 +72,8 @@ class Bm25Store:
         """Upsert by chunk_id so re-ingestion does not duplicate entries."""
         existing = {cid: i for i, cid in enumerate(self.chunk_ids)}
         for c in chunks:
-            row = (c.chunk_id, c.text, c.meta.as_dict(), tokenize(c.text))
+            metadata = {**c.meta.as_dict(), "doc_id": c.doc_id}
+            row = (c.chunk_id, c.text, metadata, tokenize(c.text))
             if c.chunk_id in existing:
                 i = existing[c.chunk_id]
                 self.chunk_ids[i], self.texts[i], self.metas[i], self.corpus[i] = row
@@ -82,6 +83,26 @@ class Bm25Store:
                 self.metas.append(row[2])
                 self.corpus.append(row[3])
         self._reindex()
+
+    def delete(self, doc_id: str, source: str | None = None) -> int:
+        keep = [
+            index
+            for index, meta in enumerate(self.metas)
+            if meta.get("doc_id") != doc_id
+            and not (
+                meta.get("source") == source
+                if source is not None
+                else meta.get("source")
+                and make_doc_id(meta["source"]) == doc_id
+            )
+        ]
+        removed = len(self.chunk_ids) - len(keep)
+        self.chunk_ids = [self.chunk_ids[i] for i in keep]
+        self.texts = [self.texts[i] for i in keep]
+        self.metas = [self.metas[i] for i in keep]
+        self.corpus = [self.corpus[i] for i in keep]
+        self._reindex()
+        return removed
 
     # --- reading ---
 

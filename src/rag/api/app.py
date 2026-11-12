@@ -12,6 +12,7 @@ model weights on every question.
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -26,6 +27,7 @@ from ..chunking.registry import STRATEGIES
 from ..config import settings
 from ..embeddings import LocalEmbedder
 from ..llm.registry import build_judge, build_llm, describe_backend
+from ..pipeline import delete_document as remove_document
 from ..pipeline import ingest as run_ingest
 from ..rerank import build_reranker
 from ..stores.bm25 import Bm25Store
@@ -154,6 +156,16 @@ def documents() -> dict:
         except Exception as exc:
             index[strategy] = {"error": str(exc)}
     return {"documents": rows, "indexes": index}
+
+
+@app.delete("/v1/documents/{doc_id}")
+def delete_document(doc_id: str) -> dict:
+    if re.fullmatch(r"[0-9a-f]{16}", doc_id) is None:
+        raise HTTPException(404, "document not found")
+    if not remove_document(doc_id, settings):
+        raise HTTPException(404, "document not found")
+
+    return {"status": "deleted", "doc_id": doc_id}
 
 
 @app.post("/v1/ingest")
