@@ -7,18 +7,30 @@ instead of a metadata filter on every single query.
 
 from __future__ import annotations
 
+import json
+
 import chromadb
 import numpy as np
 from chromadb.config import Settings as ChromaSettings
 
+from ..config import Settings
 from ..models import Chunk
 
 
 class VectorStore:
-    def __init__(self, persist_dir, strategy: str) -> None:
+    def __init__(self, settings: Settings, strategy: str) -> None:
         self.strategy = strategy
+        fields = {
+            "embedding_model", "chunk_tokens", "chunk_overlap_tokens",
+            "min_chunk_chars", "near_duplicate_threshold",
+        }
+        if strategy == "header":
+            fields.add("header_merge_small")
+        elif strategy == "semantic":
+            fields.update({"semantic_percentile", "semantic_buffer_size"})
+        self.build = json.dumps(settings.model_dump(include=fields), sort_keys=True)
         self.client = chromadb.PersistentClient(
-            path=str(persist_dir),
+            path=str(settings.chroma_dir),
             settings=ChromaSettings(anonymized_telemetry=False, allow_reset=True),
         )
         self.collection = self._open()
@@ -27,10 +39,18 @@ class VectorStore:
         return self.client.get_or_create_collection(
             name=f"chunks_{self.strategy}",
             # Vectors are L2-normalised, so cosine is the right space.
-            metadata={"hnsw:space": "cosine", "strategy": self.strategy},
+            metadata={"hnsw:space": "cosine", "strategy": self.strategy, "build": self.build},
         )
 
+    def check_build(self) -> None:
+        if (self.collection.metadata or {}).get("build") != self.build:
+            raise RuntimeError(
+                f"The '{self.strategy}' index has different or unknown build settings. "
+                f"Run 'python -m rag ingest --strategy {self.strategy} --rebuild' to rebuild it."
+            )
+
     def add(self, chunks: list[Chunk], vectors: np.ndarray) -> None:
+        self.check_build()
         if not chunks:
             return
         self.collection.upsert(
@@ -41,6 +61,7 @@ class VectorStore:
         )
 
     def query(self, vector: np.ndarray, top_k: int) -> list[dict]:
+        self.check_build()
         res = self.collection.query(
             query_embeddings=[vector.tolist()],
             n_results=top_k,

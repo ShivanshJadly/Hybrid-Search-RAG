@@ -34,8 +34,10 @@ from rag.models import (
     content_fingerprint,
     make_chunk_id,
 )
+from rag.pipeline import ingest, search
 from rag.stores.bm25 import tokenize
 from rag.stores.documents import DocumentStore
+from rag.stores.vector import VectorStore
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "raw"
 needs_corpus = pytest.mark.skipif(not DATA.exists(), reason="sample corpus absent")
@@ -74,6 +76,52 @@ def fake_embed(texts: list[str]) -> np.ndarray:
     norms = np.linalg.norm(out, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
     return out / norms
+
+
+class FakeEmbedder(WordTokenizer):
+    def validate(self) -> None:
+        pass
+
+    def embed_passages(self, texts: list[str], *, show_progress: bool = False) -> np.ndarray:
+        return fake_embed(texts)
+
+    def embed_query(self, text: str) -> np.ndarray:
+        return fake_embed([text])[0]
+
+
+@pytest.mark.parametrize("changed", [
+    {"embedding_model": "a-different-embedding-model"},
+    {"chunk_tokens": 40},
+    {"chunk_overlap_tokens": 4},
+])
+def test_index_rejects_incompatible_build_settings(tmp_path, changed):
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "guide.txt").write_text("A guide to setting up a search index.", encoding="utf-8")
+    settings = Settings(storage_dir=tmp_path / "storage", chunk_tokens=20, chunk_overlap_tokens=2, min_chunk_chars=1)
+    embedder = FakeEmbedder()
+    assert ingest(corpus, settings, embedder).vector_count == 1
+    assert len(search("search index", settings, embedder)["dense"]) == 1
+
+    other = settings.model_copy(update=changed)
+    with pytest.raises(RuntimeError, match="--rebuild"):
+        search("search index", other, embedder)
+    with pytest.raises(RuntimeError, match="--rebuild"):
+        ingest(corpus, other, embedder)
+
+    report = ingest(corpus, other, embedder, rebuild=True)
+    assert report.vector_count == report.bm25_count == 1
+    assert len(search("search index", other, embedder)["dense"]) == 1
+
+
+def test_legacy_index_requires_rebuild_instead_of_assuming_current_settings(tmp_path):
+    settings = Settings(storage_dir=tmp_path)
+    store = VectorStore(settings, "fixed")
+    store.add([chunk_of("legacy text")], fake_embed(["legacy text"]))
+    store.collection.modify(metadata={"strategy": "fixed"})
+
+    with pytest.raises(RuntimeError, match="--rebuild"):
+        search("query", settings, FakeEmbedder())
 
 
 def doc_of(text: str, anchors: list[Anchor] | None = None) -> LoadedDocument:

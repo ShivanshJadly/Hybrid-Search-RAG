@@ -76,7 +76,7 @@ def ingest(
         strategy_name, embedder, settings, embed_fn=embedder.embed_passages
     )
 
-    vector_store = VectorStore(settings.chroma_dir, strategy_name)
+    vector_store = VectorStore(settings, strategy_name)
     bm25_store = Bm25Store(settings.bm25_dir, strategy_name)
     bm25_store.load()
     # Shared across strategies: the loaded form of a document does not depend
@@ -88,6 +88,7 @@ def ingest(
         log.info("Rebuilding indexes for strategy %s", strategy_name)
         vector_store.reset()
         bm25_store.reset()
+    vector_store.check_build()
 
     paths = discover(root)
     report.files_found = len(paths)
@@ -178,7 +179,7 @@ def search(
     the point -- it shows what each half of hybrid search contributes before
     any merging hides it.
     """
-    vector_store = VectorStore(settings.chroma_dir, strategy_name)
+    vector_store = VectorStore(settings, strategy_name)
     bm25_store = Bm25Store(settings.bm25_dir, strategy_name)
     bm25_store.load()
 
