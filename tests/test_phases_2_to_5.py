@@ -21,7 +21,7 @@ from rag.confidence import (
 from rag.confidence import score as score_confidence
 from rag.config import Settings
 from rag.eval.dataset import InvalidGoldenSet, load_golden_set, summarise
-from rag.eval.metrics import EvalSummary, QuestionResult, score_retrieval
+from rag.eval.metrics import EvalSummary, QuestionResult, judge_correctness, judge_faithfulness, score_retrieval
 from rag.generation import (
     INSUFFICIENT,
     GeneratedAnswer,
@@ -392,6 +392,37 @@ def test_retrieval_scoring_matches_on_document_name():
     hit_, precision = score_retrieval(answer, golden)
     assert hit_ is True
     assert precision == 0.5
+
+
+@pytest.mark.parametrize("reply,expected", [
+    ("INCORRECT", "INCORRECT"),
+    ("NOT CORRECT", "INCORRECT"),
+    ("PARTIAL\nSome facts are correct.", "PARTIAL"),
+])
+def test_correctness_judge_reads_the_verdict_line(reply, expected):
+    from rag.eval.dataset import GoldenQuestion
+
+    answer = Answer.__new__(Answer)
+    answer.text = "A draft answer."
+    golden = GoldenQuestion("q1", "lookup", "q", True, "Expected answer", [])
+    judge = StubLLM(mode="scripted", responses=[reply])
+
+    assert judge_correctness(answer, golden, judge) == expected
+
+
+@pytest.mark.parametrize("reply,expected", [
+    ("UNGROUNDED", "UNGROUNDED"),
+    ("NOT GROUNDED", "UNGROUNDED"),
+    ("**GROUNDED**\nThe source supports this.", "GROUNDED"),
+])
+def test_faithfulness_judge_reads_the_verdict_line(reply, expected):
+    answer = Answer.__new__(Answer)
+    answer.text = "A draft answer."
+    answer.declined = False
+    answer.sources = [chunk("a")]
+    judge = StubLLM(mode="scripted", responses=[reply])
+
+    assert judge_faithfulness(answer, judge) == expected
 
 
 def test_false_refusal_rate_penalises_always_declining():
