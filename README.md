@@ -121,6 +121,10 @@ number for an answer nobody sees rewards refusing while holding good material.
 every ingest asserts the counts match. Drift would silently degrade fusion with
 nothing raising.
 
+The vector index records the embedding and chunking settings used to build it.
+After changing those settings, or when upgrading a legacy index with no build
+metadata, use `python -m rag ingest --strategy <strategy> --rebuild` before searching.
+
 ## Limitations
 
 **The sample corpus is too easy.** Six files, and all three chunking strategies

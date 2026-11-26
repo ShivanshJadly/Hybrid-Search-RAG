@@ -233,7 +233,7 @@ def status() -> None:
     console.print("")
     for strategy in STRATEGIES:
         try:
-            v = VectorStore(settings.chroma_dir, strategy).count()
+            v = VectorStore(settings, strategy).count()
             b = Bm25Store(settings.bm25_dir, strategy)
             b.load()
             if v == 0 and b.count() == 0:

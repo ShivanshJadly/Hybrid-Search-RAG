@@ -128,7 +128,7 @@ class HybridRetriever:
         self.embedder = embedder
         self.strategy = strategy
         self.reranker = reranker
-        self.vector_store = VectorStore(settings.chroma_dir, strategy)
+        self.vector_store = VectorStore(settings, strategy)
         self.bm25_store = Bm25Store(settings.bm25_dir, strategy)
         self.bm25_store.load()
 
@@ -146,6 +146,7 @@ class HybridRetriever:
         and the evaluation's ablation runs share one code path -- an ablation
         that goes through different code is not measuring the same system.
         """
+        self.vector_store.check_build()
         top_n = top_n or self.settings.rerank_top_n
         rerank = self.settings.rerank_enabled if rerank is None else rerank
         trace = RetrievalTrace(query=query, strategy=self.strategy)

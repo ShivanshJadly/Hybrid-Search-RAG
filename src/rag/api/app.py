@@ -143,7 +143,7 @@ def documents() -> dict:
     index = {}
     for strategy in STRATEGIES:
         try:
-            vector = VectorStore(settings.chroma_dir, strategy).count()
+            vector = VectorStore(settings, strategy).count()
             bm25 = Bm25Store(settings.bm25_dir, strategy)
             bm25.load()
             index[strategy] = {
