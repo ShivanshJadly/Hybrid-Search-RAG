@@ -158,12 +158,10 @@ def score_retrieval(answer: Answer, golden: GoldenQuestion) -> tuple[bool, float
     return hits > 0, hits / len(retrieved)
 
 
-def _first_word(text: str, allowed: tuple[str, ...], fallback: str) -> str:
-    upper = (text or "").upper()
-    for token in allowed:
-        if token in upper:
-            return token
-    return fallback
+def _read_verdict(text: str, allowed: tuple[str, ...], fallback: str) -> str:
+    first_line = (text or "").lstrip().partition("\n")[0]
+    verdict = first_line.strip(" \t\r*_`").upper()
+    return verdict if verdict in allowed else fallback
 
 
 def judge_correctness(answer: Answer, golden: GoldenQuestion, judge: LLMClient) -> str:
@@ -176,7 +174,7 @@ def judge_correctness(answer: Answer, golden: GoldenQuestion, judge: LLMClient) 
         f"Answer to grade:\n{answer.text}\n\nGrade:",
         max_tokens=128,
     )
-    return _first_word(reply.text, ("CORRECT", "PARTIAL", "INCORRECT"), "INCORRECT")
+    return _read_verdict(reply.text, ("CORRECT", "PARTIAL", "INCORRECT"), "INCORRECT")
 
 
 def judge_faithfulness(answer: Answer, judge: LLMClient) -> str:
@@ -190,7 +188,7 @@ def judge_faithfulness(answer: Answer, judge: LLMClient) -> str:
         f"Context:\n{context}\n\nAnswer:\n{answer.text}\n\nGrade:",
         max_tokens=128,
     )
-    return _first_word(reply.text, ("GROUNDED", "PARTIAL", "UNGROUNDED"), "UNGROUNDED")
+    return _read_verdict(reply.text, ("GROUNDED", "PARTIAL", "UNGROUNDED"), "UNGROUNDED")
 
 
 def citation_accuracy(answer: Answer) -> float:
